@@ -12,7 +12,7 @@ const htmlLogin = `
 </head>
 <body>
 <div>
-    <a href="{{.feishuURL}}">飞书登陆</a>
+    <a href="{{.URL}}">{{.Label}}</a>
 </div>
 </body>
 </html>

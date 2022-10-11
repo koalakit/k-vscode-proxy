@@ -3,12 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"time"
 )
-
-var gUserCache KVCache[*UserData]
 
 var (
 	ErrUserNotFound   = errors.New("user not found")
@@ -37,41 +33,9 @@ type UserData struct {
 	UpdatedAt time.Time `yaml:"updated-at"`
 }
 
-// 存储用户数据
-func (user *UserData) Save() (err error) {
-	savePath := UserDataPath(user.UID)
-	user.UpdatedAt = time.Now()
-	err = EncodeYamlFile(savePath, user)
-
-	if err != nil {
-		LogDebug("save user:", savePath, err)
-	} else {
-		LogDebug("save user:", savePath)
-	}
-	return
-}
-
-// 加载用户数据
-func (user *UserData) Load(openID string) (err error) {
-	savePath := UserDataPath(openID)
-	err = DecodeYamlFile(savePath, user)
-
-	if err != nil {
-		LogDebug("load user:", savePath, err)
-	} else {
-		LogDebug("load user:", savePath)
-	}
-	return
-}
-
-// 是否存在
-func (user *UserData) IsExits(openID string) bool {
-	savePath := UserDataPath(openID)
-	if _, err := os.Stat(savePath); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
+// 返回用户缓存键名
+func UserKey(uid string) string {
+	return fmt.Sprintf("user:%v", uid)
 }
 
 func UserDataNew(uid string) (user *UserData) {
@@ -83,31 +47,14 @@ func UserDataNew(uid string) (user *UserData) {
 	return
 }
 
-func UserDataPath(uid string) string {
-	return path.Join(gAppConfig.UserFolder, fmt.Sprintf("%v.yaml", uid))
-}
-
 func UserLoad(uid string) (user *UserData, err error) {
-	cacheUser, ok := gUserCache.Get(uid)
-	LogDebug("UserLoad:", cacheUser, ok)
-	if ok {
-		if cacheUser != nil {
-			// 命中缓存
-			user = cacheUser
-			LogDebug("命中缓存: uid:", user.UID)
-			return
-		}
-
-		gUserCache.Del(uid)
-	}
-
-	user = new(UserData)
-	if err = user.Load(uid); err != nil {
+	var userData UserData
+	userData, err = RedisGetJSON[UserData](UserKey(uid))
+	if err != nil {
 		return
 	}
 
-	gUserCache.Set(uid, user)
-
+	user = &userData
 	return
 }
 
@@ -117,26 +64,6 @@ func UserSave(user *UserData) (err error) {
 	}
 
 	user.UpdatedAt = time.Now()
-	if err = user.Save(); err != nil {
-		return
-	}
-
-	gUserCache.SetEx(user.UID, user, 7*24*int64(time.Hour))
-
+	err = RedisSetJSON(UserKey(user.UID), user, 0)
 	return
-}
-
-func UserDebug() {
-	gUserCache.itemsRW.RLock()
-	defer gUserCache.itemsRW.RUnlock()
-
-	LogDebug("UserDebug============================================================")
-	for k, v := range gUserCache.items {
-		LogDebugf("uid:%s name:%s token:%s", k, v.Value.Name, v.Value.UserToken)
-	}
-	LogDebug("UserDebug============================================================")
-}
-
-func init() {
-	gUserCache.Start()
 }

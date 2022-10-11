@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -68,6 +69,12 @@ func commandServe(args []string) {
 		return
 	}
 
+	// 初始化数据库
+	if err = RedisInit(gAppConfig.RedisDB); err != nil {
+		log.Fatal("[Redis]", err)
+		return
+	}
+
 	var app = new(ProxyApp)
 	var server = http.Server{
 		Addr:    *address,
@@ -105,6 +112,19 @@ func commandUser(args []string) {
 	flags.Parse(args)
 
 	var err error
+
+	// gAppConfig.SetRoot(*root)
+	if err = DecodeYamlFile(gAppConfig.ConfigPath, &gAppConfig); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// 初始化数据库
+	if err = RedisInit(gAppConfig.RedisDB); err != nil {
+		log.Fatal("[Redis]", err)
+		return
+	}
+
 	var userData map[string]any
 
 	if len(*uid) <= 0 {
@@ -119,21 +139,24 @@ func commandUser(args []string) {
 
 	// 设置字段值
 	if len(*fieldValue) > 0 {
-		if err = DecodeYamlFile(UserDataPath(*uid), &userData); err != nil {
-			fmt.Println(err)
+		err = RedisGetJSONEx("user:"+*uid, &userData)
+		if err != nil {
+			log.Fatal(err)
 			return
 		}
 
 		userData[*fieldName] = *fieldValue
-		if err = EncodeYamlFile(UserDataPath(*uid), userData); err != nil {
-			fmt.Println(err)
+		err = RedisSetJSON("user:"+*uid, userData, 0)
+		if err != nil {
+			log.Fatal(err)
+			return
 		}
 		return
 	}
 
 	// 读取字段值
 	{
-		if err = DecodeYamlFile(UserDataPath(*uid), &userData); err != nil {
+		if err = RedisGetJSONEx("user:"+*uid, &userData); err != nil {
 			fmt.Println(err)
 			return
 		}
@@ -160,8 +183,6 @@ func commandConfig(args []string) {
 	if *init {
 		// 创建根目录
 		os.Mkdir(gAppConfig.RootFolder, os.ModeDir)
-		// 创建用户数据目录
-		os.Mkdir(gAppConfig.UserFolder, os.ModeDir)
 
 		// 保存默认配置
 		if err = EncodeYamlFile(gAppConfig.ConfigPath, &gAppConfig); err != nil {

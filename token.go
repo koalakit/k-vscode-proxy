@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
@@ -10,33 +11,41 @@ const (
 	kTokenLength = 32
 )
 
-var gTokenCache KVCache[string]
+const kTokenExpire = 1 * 24 * time.Hour
 
-const kTokenExpire = 1 * 24 * int64(time.Hour)
-
-func TokenSet(token string, uid string) {
-	gTokenCache.SetEx(token, uid, kTokenExpire)
+type TokenData struct {
+	UID        string
+	BackendURL string
 }
 
-func TokenGet(token string) (uid string, ok bool) {
-	uid, ok = gTokenCache.Get(token)
-	if !ok {
+func TokenKey(token string) string {
+	return fmt.Sprintf("token:%v", token)
+}
+
+func TokenSet(token string, uid string, backendURL string) (err error) {
+	var data TokenData
+	data.UID = uid
+	data.BackendURL = backendURL
+
+	err = RedisSetJSON(TokenKey(token), data, kTokenExpire)
+	return
+}
+
+func TokenGet(token string) (uid string, backendURL string, ok bool) {
+	data, err := RedisGetJSON[TokenData](TokenKey(token))
+	if err != nil {
+		ok = false
 		return
 	}
 
-	// 清理空的缓存
-	if len(uid) <= 0 {
-		TokenDel(token)
-
-		uid = ""
-		ok = false
-	}
-
+	uid = data.UID
+	backendURL = data.BackendURL
+	ok = true
 	return
 }
 
 func TokenDel(token string) {
-	gTokenCache.Del(token)
+	RedisDel(token)
 }
 
 func TokenCookie(w http.ResponseWriter, token string) {
@@ -49,23 +58,8 @@ func TokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, cookie)
 }
 
-func TokenDebug() {
-	gTokenCache.itemsRW.RLock()
-	defer gTokenCache.itemsRW.RUnlock()
-
-	LogDebug("TokenDebug============================================================")
-	for k, v := range gTokenCache.items {
-		LogDebugf("token: %s:%s", k, v.Value)
-	}
-	LogDebug("TokenDebug============================================================")
-}
-
 func TokenNew() (token string) {
 	rand.Seed(time.Now().UnixNano())
 	token = RandomString(kTokenLength)
 	return
-}
-
-func init() {
-	gTokenCache.Start()
 }

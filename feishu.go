@@ -70,7 +70,7 @@ func FeishuAuth(code string, state string) (user *UserData, err error) {
 	}
 
 	// 存储token
-	TokenSet(user.UserToken, user.UID)
+	TokenSet(user.UserToken, user.UID, user.BackendAddress)
 
 	return
 }

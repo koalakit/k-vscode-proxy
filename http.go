@@ -21,8 +21,10 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			var query = r.URL.Query()
 			var code = query.Get("code")
 			var state = query.Get("state")
+			if len(state) <= 0 {
+				state = "/"
+			}
 
-			// http.Redirect(w, r, state, http.StatusTemporaryRedirect)
 			user, err := FeishuAuth(code, state)
 			if err != nil {
 				RenderErrorHtml(w, fmt.Sprintf(`[ERROR] %v`, err))
@@ -38,14 +40,18 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
 			query := r.URL.Query()
 			redirectURL := query.Get("redirect")
-			RenderLoginHtml(w, redirectURL)
+			if len(redirectURL) <= 0 {
+				redirectURL = "/"
+			}
+
+			RenderLoginHtml(w, "飞书登陆", FeishuAuthenURL(redirectURL))
 			return
 		}
 	}
 
 	LogDebug("验证cookie")
 
-	var err error
+	// var err error
 	var token string
 
 	// 获取token
@@ -57,7 +63,6 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		token = cookie.Value
-		LogDebug("url token:", token)
 	}
 
 	// 验证cookie
@@ -68,8 +73,7 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	var uid string
-	uid, ok := TokenGet(token)
+	_, backendURL, ok := TokenGet(token)
 	if !ok {
 		if isWebsocket {
 			return
@@ -79,35 +83,41 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := UserLoad(uid)
-	if err != nil {
-		if isWebsocket {
-			return
-		}
-
-		RenderErrorHtml(w, fmt.Sprintf("用户数据加载失败, 请联系管理员: %v", err))
+	// 后端vscode未配置
+	if len(backendURL) <= 0 {
+		RenderLoginHtml(w, "后端VSCODE未配置, 重新登陆", r.RequestURI)
 		return
 	}
 
-	// 检测token
-	if user.UserToken != token {
-		if isWebsocket {
-			return
-		}
+	// user, err := UserLoad(uid)
+	// if err != nil {
+	// 	if isWebsocket {
+	// 		return
+	// 	}
 
-		RenderErrorHtml(w, "登陆过期，请重新登陆")
-		LogDebug("登陆过期，请重新登陆")
-		return
-	}
+	// 	RenderErrorHtml(w, fmt.Sprintf("用户数据加载失败, 请联系管理员: %v", err))
+	// 	return
+	// }
 
-	if len(user.BackendAddress) <= 0 {
+	// // 检测token
+	// if user.UserToken != token {
+	// 	if isWebsocket {
+	// 		return
+	// 	}
+
+	// 	RenderErrorHtml(w, "登陆过期，请重新登陆")
+	// 	LogDebug("登陆过期，请重新登陆")
+	// 	return
+	// }
+
+	if len(backendURL) <= 0 {
 		RenderErrorHtml(w, "开发环境尚未配置, 请联系管理员")
 		LogDebug("开发环境尚未配置, 请联系管理员")
 		return
 	}
 
 	// 反向代理到vscode server
-	targetURL, _ := url.Parse(user.BackendAddress)
+	targetURL, _ := url.Parse(backendURL)
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, err error) {
 		reply := fmt.Sprintf("[HTTP] proxy error: %v", err)
@@ -118,14 +128,14 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-func RenderLoginHtml(w http.ResponseWriter, redirectURL string) {
+func RenderLoginHtml(w http.ResponseWriter, label, redirectURL string) {
 	// t, _ := template.ParseFiles("./html/login.html")
 	t, _ := template.New("login").Parse(htmlLogin)
-	t.Execute(w, map[string]string{"feishuURL": FeishuAuthenURL(redirectURL)})
+	t.Execute(w, map[string]string{"Label": label, "URL": redirectURL})
 }
 
 func RenderErrorHtml(w http.ResponseWriter, message string) {
 	// t, _ := template.ParseFiles("./html/error.html")
-	t, _ := template.New("login").Parse(htmlError)
+	t, _ := template.New("error").Parse(htmlError)
 	t.Execute(w, map[string]string{"Message": message})
 }

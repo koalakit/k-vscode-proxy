@@ -18,11 +18,12 @@ type AppConfig struct {
 	ConfigPath string `yaml:"-"`
 	// 根目录
 	RootFolder string `yaml:"-"`
-	// 用户数据目录
-	UserFolder string `yaml:"-"`
 
 	// Cookie字段名
 	Cookie string `yaml:"cookie"`
+
+	// 数据库
+	RedisDB string `yaml:"redisdb"`
 
 	// 飞书配置
 	FeishuAppID       string `yaml:"feishu-app-id"`
@@ -33,7 +34,6 @@ type AppConfig struct {
 
 func (config *AppConfig) SetRoot(folder string) {
 	config.RootFolder = folder
-	config.UserFolder = path.Join(config.RootFolder, "user")
 	config.ConfigPath = path.Join(config.RootFolder, "app-config.yaml")
 }
 
