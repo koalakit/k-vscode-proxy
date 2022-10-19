@@ -14,25 +14,25 @@ const (
 const kTokenExpire = 1 * 24 * time.Hour
 
 type TokenData struct {
-	UID        string
-	BackendURL string
+	UID        int    `yaml:"uid"`
+	BackendURL string `yaml:"backend"`
 }
 
 func TokenKey(token string) string {
 	return fmt.Sprintf("token:%v", token)
 }
 
-func TokenSet(token string, uid string, backendURL string) (err error) {
+func TokenSet(token string, uid int, backendURL string) (err error) {
 	var data TokenData
 	data.UID = uid
 	data.BackendURL = backendURL
 
-	err = RedisSetJSON(TokenKey(token), data, kTokenExpire)
+	err = RedisSetYaml(TokenKey(token), data, kTokenExpire)
 	return
 }
 
-func TokenGet(token string) (uid string, backendURL string, ok bool) {
-	data, err := RedisGetJSON[TokenData](TokenKey(token))
+func TokenGet(token string) (uid int, backendURL string, ok bool) {
+	data, err := RedisGetYaml[TokenData](TokenKey(token))
 	if err != nil {
 		ok = false
 		return

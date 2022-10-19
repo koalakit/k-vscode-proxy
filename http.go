@@ -73,7 +73,7 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 	return
 	// }
 
-	_, backendURL, ok := TokenGet(token)
+	uid, backendURL, ok := TokenGet(token)
 	if !ok {
 		if isWebsocket {
 			return
@@ -81,6 +81,46 @@ func (app *ProxyApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		http.Redirect(w, r, fmt.Sprintf("/login?redirect=%s", r.RequestURI), http.StatusTemporaryRedirect)
 		return
+	}
+
+	if !isWebsocket {
+		// 管理员操作
+		if r.URL.Path == "/admin/execute" {
+			query := r.URL.Query()
+			command := query.Get("command")
+
+			Log("[ADMIN] ", command)
+
+			// 默认id为1是管理员
+			if uid != 1 {
+				RenderErrorHtml(w, fmt.Sprintf(`[ERROR] %v`, "没有设置操作码或者操作码不对"))
+				return
+			}
+
+			// 更新token
+			if command == "token-reload" {
+				account := query.Get("account")
+				if len(account) <= 0 {
+					RenderErrorHtml(w, fmt.Sprintf(`[ERROR] %v`, "没有设置账号"))
+					return
+				}
+
+				user, err := UserLoad(account)
+				if err != nil {
+					RenderErrorHtml(w, fmt.Sprintf(`[ERROR] %v`, err))
+					return
+				}
+
+				err = TokenSet(user.UserToken, user.ID, user.BackendAddress)
+				if err != nil {
+					RenderErrorHtml(w, fmt.Sprintf(`[ERROR] %v`, err))
+					return
+				}
+
+				RenderErrorHtml(w, fmt.Sprint(`[INFO] `, user.ID, user.BackendAddress))
+				return
+			}
+		}
 	}
 
 	// 后端vscode未配置

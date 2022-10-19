@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -14,56 +13,69 @@ var (
 
 // 用户数据
 type UserData struct {
-	UID      string `yaml:"uid"`
-	FeishuID string `yaml:"feishu-id"`
+	ID       int    `gorm:"primaryKey" yaml:"id"`
+	FeishuID string `gorm:"size:64;index" yaml:"feishu-id"`
 
-	Name      string `yaml:"name"`
-	AvatarURL string `yaml:"avatar-url"`
-	Email     string `yaml:"email"`
-	Mobile    string `yaml:"mobile"`
+	Account   string `gorm:"size:16;index" yaml:"account"`
+	Name      string `gorm:"size:16" yaml:"name"`
+	AvatarURL string `gorm:"size:256" yaml:"avatar-url"`
+	Email     string `gorm:"size:32" yaml:"email"`
+	Mobile    string `gorm:"size:16" yaml:"mobile"`
 
-	BackendAddress string `yaml:"backend-address"`
+	BackendAddress string `gorm:"size:256" yaml:"backend-address"`
 
-	CreateIP string `yaml:"create-ip"`
-	LoginIP  string `yaml:"login-ip"`
+	CreateIP string `gorm:"size:16;column:create_ip" yaml:"create-ip"`
+	LastIP   string `gorm:"size:16;column:last_ip" yaml:"login-ip"`
 
-	UserToken string `yaml:"user-token"`
+	UserToken string `gorm:"size:32" yaml:"user-token"`
 
 	CreatedAt time.Time `yaml:"created-at"`
 	UpdatedAt time.Time `yaml:"updated-at"`
 }
 
-// 返回用户缓存键名
-func UserKey(uid string) string {
-	return fmt.Sprintf("user:%v", uid)
+func (user *UserData) TableName() string {
+	return "user"
 }
 
-func UserDataNew(uid string) (user *UserData) {
+// UserDataCreateFromFeishu 通过飞书OpenID创建用户
+func UserDataCreateFromFeishu(feishuID string) (user *UserData, err error) {
 	user = new(UserData)
-	user.UID = uid
-	user.CreatedAt = time.Now()
-	user.UserToken = TokenNew()
+	user.FeishuID = feishuID
 
+	db := mysqldb.Create(user)
+	err = db.Error
 	return
 }
 
-func UserLoad(uid string) (user *UserData, err error) {
-	var userData UserData
-	userData, err = RedisGetJSON[UserData](UserKey(uid))
-	if err != nil {
+// UserLoadFromFeishu 通过飞书OpenID加载用户
+func UserLoadFromFeishu(feishuID string) (user *UserData, err error) {
+	user = new(UserData)
+
+	db := mysqldb.Raw("SELECT * FROM user WHERE feishu_id=? LIMIT 1", feishuID).Scan(user)
+	if err = db.Error; err != nil {
+		user = nil
 		return
 	}
 
-	user = &userData
 	return
 }
 
+// UserLoad 通过账号加载用户
+func UserLoad(account string) (user *UserData, err error) {
+	user = new(UserData)
+
+	db := mysqldb.Raw("SELECT * FROM user WHERE account=? LIMIT 1", account).Scan(user)
+	if err = db.Error; err != nil {
+		user = nil
+		return
+	}
+
+	return
+}
+
+// UserSave 保存用户数据
 func UserSave(user *UserData) (err error) {
-	if user == nil {
-		return
-	}
-
-	user.UpdatedAt = time.Now()
-	err = RedisSetJSON(UserKey(user.UID), user, 0)
+	db := mysqldb.Save(user)
+	err = db.Error
 	return
 }

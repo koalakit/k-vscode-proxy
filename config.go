@@ -2,28 +2,24 @@ package main
 
 import (
 	"os"
-	"path"
 
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	AppVersion               = "k-vscode-proxy v0.1.0"
-	DefaultFeishuRedirectURL = "https://open.feishu.cn/open-apis/authen/v1/index"
-	DefaultCookie            = "k-vscode-proxy-token"
+	AppVersion = "k-vscode-proxy v0.1.0"
 )
 
 type AppConfig struct {
-	// 配置文件
-	ConfigPath string `yaml:"-"`
-	// 根目录
-	RootFolder string `yaml:"-"`
-
+	Debug bool   `yaml:"-"`
+	Addr  string `yaml:"addr"`
 	// Cookie字段名
 	Cookie string `yaml:"cookie"`
 
+	// MySQL
+	MySQLURL string `yaml:"mysql-url"`
 	// 数据库
-	RedisDB string `yaml:"redisdb"`
+	RedisURL string `yaml:"redis-url"`
 
 	// 飞书配置
 	FeishuAppID       string `yaml:"feishu-app-id"`
@@ -32,9 +28,33 @@ type AppConfig struct {
 	FeishuRedirectURL string `yaml:"feishu-redirect-url"`
 }
 
-func (config *AppConfig) SetRoot(folder string) {
-	config.RootFolder = folder
-	config.ConfigPath = path.Join(config.RootFolder, "app-config.yaml")
+func (config *AppConfig) LoadEnv() {
+	if v := os.Getenv("KVP_ADDR"); len(v) > 0 {
+		config.Addr = v
+	}
+
+	if v := os.Getenv("KVP_MYSQL_URL"); len(v) > 0 {
+		config.MySQLURL = v
+	}
+	if v := os.Getenv("KVP_REDIS_URL"); len(v) > 0 {
+		config.RedisURL = v
+	}
+
+	if v := os.Getenv("KVP_FEISHU_APP_ID"); len(v) > 0 {
+		config.FeishuAppID = v
+	}
+
+	if v := os.Getenv("KVP_FEISHU_APP_SECRET"); len(v) > 0 {
+		config.FeishuAppSecret = v
+	}
+
+	if v := os.Getenv("KVP_FEISHU_AUTHEN_URL"); len(v) > 0 {
+		config.FeishuAuthenURL = v
+	}
+
+	if v := os.Getenv("KVP_FEISHU_REDIRECT_URL"); len(v) > 0 {
+		config.FeishuRedirectURL = v
+	}
 }
 
 var gAppConfig AppConfig
@@ -69,7 +89,7 @@ func EncodeYamlFile(name string, v interface{}) error {
 }
 
 func init() {
-	gAppConfig.SetRoot(path.Join(os.Getenv("HOME"), ".k-vscode-proxy"))
-	gAppConfig.FeishuAuthenURL = DefaultFeishuRedirectURL
-	gAppConfig.Cookie = DefaultCookie
+	gAppConfig.FeishuAuthenURL = "https://open.feishu.cn/open-apis/authen/v1/index"
+	gAppConfig.Cookie = "k-vscode-proxy-token"
+	gAppConfig.Addr = ":8001"
 }

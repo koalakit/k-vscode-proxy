@@ -48,15 +48,21 @@ func FeishuAuth(code string, state string) (user *UserData, err error) {
 		return
 	}
 
-	uid := accessTokenResp.OpenID
-	user, err = UserLoad(uid)
+	feishuID := accessTokenResp.OpenID
+
+	// 读取数据库中的记录
+	user, err = UserLoadFromFeishu(feishuID)
+	// 如果不存在则创建一条记录
 	if err != nil {
-		user = UserDataNew(uid)
+		if user, err = UserDataCreateFromFeishu(feishuID); err != nil {
+			return
+		}
 	} else {
+		// 删除token缓存
 		TokenDel(user.UserToken)
 	}
 
-	user.FeishuID = accessTokenResp.OpenID
+	user.FeishuID = feishuID
 	user.UserToken = TokenNew()
 	user.Name = accessTokenResp.Name
 	user.AvatarURL = accessTokenResp.AvatarURL
@@ -70,7 +76,7 @@ func FeishuAuth(code string, state string) (user *UserData, err error) {
 	}
 
 	// 存储token
-	TokenSet(user.UserToken, user.UID, user.BackendAddress)
+	TokenSet(user.UserToken, user.ID, user.BackendAddress)
 
 	return
 }

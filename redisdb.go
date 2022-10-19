@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"gopkg.in/yaml.v3"
 )
 
 // 全局redis实例池
@@ -17,6 +18,7 @@ func RedisInit(url string) (err error) {
 	redisdb.IdleTimeout = 1 * time.Hour
 
 	redisdb.Dial = func() (c redis.Conn, err error) {
+		Log(url)
 		c, err = redis.DialURL(url)
 		if err != nil {
 			Log("[Redis] DialURL: ", err)
@@ -75,11 +77,32 @@ func RedisSet(key string, value any, timeout time.Duration) (err error) {
 	return
 }
 
+// RedisSetJSON 存储为json对象
 func RedisSetJSON(key string, value any, timeout time.Duration) (err error) {
 	db := redisdb.Get()
 	defer db.Close()
 
 	data, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+
+	if timeout > 0 {
+		_, err = db.Do("SETEX", key, int64(timeout/time.Second), data)
+		return
+	}
+
+	_, err = db.Do("SET", key, data)
+
+	return
+}
+
+// RedisSetYaml 存储为yaml对象
+func RedisSetYaml(key string, value any, timeout time.Duration) (err error) {
+	db := redisdb.Get()
+	defer db.Close()
+
+	data, err := yaml.Marshal(value)
 	if err != nil {
 		return
 	}
@@ -165,6 +188,20 @@ func RedisGetJSON[ValueT any](key string) (value ValueT, err error) {
 	return
 }
 
+func RedisGetYaml[ValueT any](key string) (value ValueT, err error) {
+	db := redisdb.Get()
+	defer db.Close()
+
+	x, err := redis.Bytes(db.Do("GET", key))
+	if err != nil {
+		return
+	}
+
+	err = yaml.Unmarshal(x, &value)
+
+	return
+}
+
 func RedisGetJSONEx(key string, value any) (err error) {
 	db := redisdb.Get()
 	defer db.Close()
@@ -175,6 +212,20 @@ func RedisGetJSONEx(key string, value any) (err error) {
 	}
 
 	err = json.Unmarshal(x, value)
+
+	return
+}
+
+func RedisGetYamlEx(key string, value any) (err error) {
+	db := redisdb.Get()
+	defer db.Close()
+
+	x, err := redis.Bytes(db.Do("GET", key))
+	if err != nil {
+		return
+	}
+
+	err = yaml.Unmarshal(x, value)
 
 	return
 }
